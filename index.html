@@ -401,109 +401,54 @@
       recognition.onresult = (e) => {
         const transcript = e.results[0][0].transcript;
         textInput.value = transcript;
-        handleMessage(transcript);
-      };
+                if (!response.ok) {
+          
+async function handleMessage(customText = null) {
+  const text = (customText || textInput.value).trim();
+  if (!text) return;
 
-      recognition.onerror = (e) => {
-        isListening = false;
-        btnMic.classList.remove('listening');
-        if (e.error === 'not-allowed') {
-          showAlert("माइक की अनुमति नहीं मिली! Chrome Settings में जाकर Microphone Allow करें।");
-        } else if (e.error === 'no-speech') {
-          statusText.textContent = "कोई आवाज़ नहीं आई। फिर से प्रयास करें।";
-        } else {
-          showAlert(`Speech Error: ${e.error}`);
-        }
-      };
+  lastQuery = text;
+  addMessage(text, "user");
+  textInput.value = "";
+  btnSend.disabled = true;
+  statusText.textContent = "Apna AI जवाब तैयार कर रहा है...";
 
-      recognition.onend = () => {
-        isListening = false;
-        btnMic.classList.remove('listening');
-        statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
-      };
-    } else {
-      statusText.textContent = "इस ब्राउज़र में voice input उपलब्ध नहीं है";
-      showAlert("इस ब्राउज़र में Speech Recognition सपोर्ट नहीं है। Android Chrome में खोलकर प्रयास करें; टाइप करके भी भेज सकते हैं।");
-    }
-
-    btnMic.addEventListener('click', async () => {
-      if (!SpeechRecognition) {
-        showAlert("Speech Recognition उपलब्ध नहीं है।");
-        return;
-      }
-
-      if (isListening) {
-        recognition.stop();
-        return;
-      }
-
-      try {
-        if (!window.isSecureContext) {
-          showAlert("माइक के लिए HTTPS वेबसाइट को Chrome में खोलें।");
-          return;
-        }
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(track => track.stop());
-        }
-        recognition.start();
-      } catch (err) {
-        console.error("Microphone error:", err);
-        if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
-          showAlert("Chrome Site settings में Microphone को Allow करें।");
-        } else if (err && err.name === "NotFoundError") {
-          showAlert("इस डिवाइस पर माइक्रोफोन नहीं मिला।");
-        } else {
-          showAlert("माइक शुरू नहीं हो पाया: " + (err && err.message ? err.message : "फिर से प्रयास करें"));
-        }
-      }
+  try {
+    const response = await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ message: text })
     });
 
-    // 5. Message Processing
-    // IMPORTANT: Set this to your deployed HTTPS backend URL.
-    // Do NOT put your OpenAI API key in this file.
-    const API_ENDPOINT =apna-ai-backend.ankitshrivastav9937-fc6.workers.dev
+    const data = await response.json();
 
-    async function handleMessage(customText = null) {
-      const text = (customText || textInput.value).trim();
-      if (!text) return;
+    if (!response.ok) {
+      throw new Error(
+        data.details || data.error || `Server error: ${response.status}`
+      );
+    }
 
-      lastQuery = text;
-      addMessage(text, 'user');
-      textInput.value = '';
-      btnSend.disabled = true;
-      statusText.textContent = "AI जवाब तैयार कर रहा है...";
+    if (!data.answer) {
+      throw new Error("AI से जवाब नहीं मिला।");
+    }
 
-      if (!API_ENDPOINT || API_ENDPOINT.includes("apna-ai-backend.ankitshrivastav9937-fc6.workers.dev)) {
-        const reply = "मैंने आपका मैसेज सुन लिया है। अभी मेरा असली AI कनेक्शन सेट नहीं है, इसलिए मैं हर सवाल का जवाब खुद नहीं बना सकता।";
-        addMessage(reply, 'ai');
-        speakHindi(reply);
-        btnSend.disabled = false;
-        statusText.textContent = "जवाब दे दिया। फिर बोलने के लिए Mic दबाएं";
-        return;
-      }
+    addMessage(data.answer, "ai");
+    speakHindi(data.answer);
 
-      try {
-        const response = await fetch(API_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text })
-        });
+  } catch (error) {
+    console.error("Apna AI error:", error);
+    const message = "AI कनेक्शन में समस्या: " + error.message;
+    addMessage(message, "ai");
+    speakHindi(message);
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.error || `Server error (${response.status})`);
-        }
-
-        const answer = data.reply || data.answer || data.output_text;
-        if (!answer) throw new Error("Backend ने जवाब नहीं भेजा।");
-        addMessage(answer, 'ai');
-        speakHindi(answer);
-      } catch (err) {
-        console.error("AI request failed:", err);
-        addMessage("OpenAI से जवाब नहीं मिल पाया। Backend URL, server और network जाँचें।", 'ai');
-        showAlert("AI कनेक्शन में समस्या: " + (err.message || "Unknown error"));
-      } finally {
+  } finally {
+    btnSend.disabled = false;
+    statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
+  }
+}
+                  
         btnSend.disabled = false;
         statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
       }
