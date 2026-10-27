@@ -474,7 +474,7 @@
       btnSend.disabled = true;
       statusText.textContent = "AI जवाब तैयार कर रहा है...";
 
-      if (!API_ENDPOINT || API_ENDPOINT.includes("PASTE_YOUR_SECURE_BACKEND_URL_HERE")) {
+      if (!API_ENDPOINT || API_ENDPOINT.includes("apna-ai-backend.ankitshrivastav9937-fc6.workers.dev)) {
         const reply = "मैंने आपका मैसेज सुन लिया है। अभी मेरा असली AI कनेक्शन सेट नहीं है, इसलिए मैं हर सवाल का जवाब खुद नहीं बना सकता।";
         addMessage(reply, 'ai');
         speakHindi(reply);
