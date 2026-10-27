@@ -409,7 +409,8 @@
         statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
       };
     } else {
-      showAlert("आपके ब्राउज़र में Speech Recognition सपोर्ट नहीं है। कृपया Android Chrome का उपयोग करें।");
+      statusText.textContent = "इस ब्राउज़र में voice input उपलब्ध नहीं है";
+      showAlert("इस ब्राउज़र में Speech Recognition सपोर्ट नहीं है। Android Chrome में खोलकर प्रयास करें; टाइप करके भी भेज सकते हैं।");
     }
 
     btnMic.addEventListener('click', async () => {
@@ -424,29 +425,73 @@
       }
 
       try {
+        if (!window.isSecureContext) {
+          showAlert("माइक के लिए HTTPS वेबसाइट को Chrome में खोलें।");
+          return;
+        }
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
         }
         recognition.start();
       } catch (err) {
-        showAlert("माइक का उपयोग करने के लिए Microphone Permission देना आवश्यक है।");
+        console.error("Microphone error:", err);
+        if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
+          showAlert("Chrome Site settings में Microphone को Allow करें।");
+        } else if (err && err.name === "NotFoundError") {
+          showAlert("इस डिवाइस पर माइक्रोफोन नहीं मिला।");
+        } else {
+          showAlert("माइक शुरू नहीं हो पाया: " + (err && err.message ? err.message : "फिर से प्रयास करें"));
+        }
       }
     });
 
-    // 5. Message Processing (No Fake Answers)
-    function handleMessage(customText = null) {
-      const text = customText || textInput.value.trim();
+    // 5. Message Processing
+    // IMPORTANT: Set this to your deployed HTTPS backend URL.
+    // Do NOT put your OpenAI API key in this file.
+    const API_ENDPOINT = "PASTE_YOUR_SECURE_BACKEND_URL_HERE";
+
+    async function handleMessage(customText = null) {
+      const text = (customText || textInput.value).trim();
       if (!text) return;
 
       lastQuery = text;
       addMessage(text, 'user');
       textInput.value = '';
+      btnSend.disabled = true;
+      statusText.textContent = "AI जवाब तैयार कर रहा है...";
 
-      // Transparent processing notification - No fake canned reply
-      const responseNotice = `मैंने आपका संदेश सुन लिया: <b>"${text}"</b>。<br><br>💡 <i>नोट: वास्तविक AI जवाब जनरेट करने के लिए एक सुरक्षित AI Backend (जैसे Gemini या OpenAI API) जोड़ना आवश्यक है। तब तक आप ऊपर दिए गए <b>Google</b> बटन से तुरंत सर्च कर सकते हैं।</i>`;
+      if (!API_ENDPOINT || API_ENDPOINT.includes("PASTE_YOUR_SECURE_BACKEND_URL_HERE")) {
+        addMessage("आपकी आवाज़/मैसेज वेबसाइट तक पहुँच रहा है, लेकिन OpenAI कनेक्शन अभी सेट नहीं है। पहले सुरक्षित backend बनाकर उसका URL यहाँ जोड़ना होगा। अपनी OpenAI API key इस HTML फ़ाइल में न डालें।", 'ai');
+        btnSend.disabled = false;
+        statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
+        return;
+      }
 
-      addMessage(responseNotice, 'ai');
-      speakHindi(`मैंने आपका संदेश सुन लिया: ${text}। वास्तविक AI जवाब के लिए बैकएंड जोड़ना आवश्यक है।`);
+      try {
+        const response = await fetch(API_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || `Server error (${response.status})`);
+        }
+
+        const answer = data.reply || data.answer || data.output_text;
+        if (!answer) throw new Error("Backend ने जवाब नहीं भेजा।");
+        addMessage(answer, 'ai');
+        speakHindi(answer);
+      } catch (err) {
+        console.error("AI request failed:", err);
+        addMessage("OpenAI से जवाब नहीं मिल पाया। Backend URL, server और network जाँचें।", 'ai');
+        showAlert("AI कनेक्शन में समस्या: " + (err.message || "Unknown error"));
+      } finally {
+        btnSend.disabled = false;
+        statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
+      }
     }
 
     btnSend.addEventListener('click', () => handleMessage());
