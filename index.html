@@ -353,15 +353,28 @@
       const utterance = new SpeechSynthesisUtterance(clean);
 
       const voices = window.speechSynthesis.getVoices();
-      const hindiVoice = voices.find(v => v.lang.includes('hi') || v.lang === 'hi-IN') || voices.find(v => v.lang === 'en-IN');
+      const hindiVoice = voices.find(v => /^hi(-|_)?IN$/i.test(v.lang)) ||
+                         voices.find(v => v.lang.toLowerCase().startsWith('hi')) ||
+                         voices.find(v => v.lang.toLowerCase() === 'en-in');
 
-      if (hindiVoice) {
-        utterance.voice = hindiVoice;
-        utterance.lang = hindiVoice.lang;
-      } else {
-        utterance.lang = 'hi-IN';
-      }
+      utterance.lang = hindiVoice ? hindiVoice.lang : 'hi-IN';
+      if (hindiVoice) utterance.voice = hindiVoice;
+      utterance.rate = 0.92;
+      utterance.pitch = 1;
 
+      utterance.onstart = () => {
+        statusText.textContent = "Apna AI बोल रहा है...";
+      };
+      utterance.onend = () => {
+        if (!isListening) statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
+      };
+      utterance.onerror = (event) => {
+        console.warn("Text-to-speech error:", event.error);
+        statusText.textContent = "आवाज़ उपलब्ध नहीं हुई। फोन की Text-to-speech सेटिंग जाँचें।";
+      };
+
+      // Some mobile browsers need speech synthesis to be resumed before speaking.
+      window.speechSynthesis.resume();
       window.speechSynthesis.speak(utterance);
     }
 
@@ -462,9 +475,11 @@
       statusText.textContent = "AI जवाब तैयार कर रहा है...";
 
       if (!API_ENDPOINT || API_ENDPOINT.includes("PASTE_YOUR_SECURE_BACKEND_URL_HERE")) {
-        addMessage("आपकी आवाज़/मैसेज वेबसाइट तक पहुँच रहा है, लेकिन OpenAI कनेक्शन अभी सेट नहीं है। पहले सुरक्षित backend बनाकर उसका URL यहाँ जोड़ना होगा। अपनी OpenAI API key इस HTML फ़ाइल में न डालें।", 'ai');
+        const reply = "मैंने आपका मैसेज सुन लिया है। अभी मेरा असली AI कनेक्शन सेट नहीं है, इसलिए मैं हर सवाल का जवाब खुद नहीं बना सकता।";
+        addMessage(reply, 'ai');
+        speakHindi(reply);
         btnSend.disabled = false;
-        statusText.textContent = "Mic दबाएं और बोलना शुरू करें";
+        statusText.textContent = "जवाब दे दिया। फिर बोलने के लिए Mic दबाएं";
         return;
       }
 
